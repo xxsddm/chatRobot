@@ -1,8 +1,8 @@
-package com.example.chat.controller;
+package com.gyt.chat.controller;
 
-import com.example.chat.dto.ChatRequest;
-import com.example.chat.dto.ChatResponse;
-import com.example.chat.service.ChatService;
+import com.gyt.chat.dto.ChatRequest;
+import com.gyt.chat.dto.ChatResponse;
+import com.gyt.chat.service.ChatService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;

@@ -1,4 +1,4 @@
-package com.example.chat.service;
+package com.gyt.chat.service;
 
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;

@@ -1,4 +1,4 @@
-package com.example.chat.config;
+package com.gyt.chat.config;
 
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.openai.OpenAiChatModel;

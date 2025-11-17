@@ -1,4 +1,4 @@
-package com.example.chat.dto;
+package com.gyt.chat.dto;
 
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
