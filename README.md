@@ -1,108 +1,134 @@
-# Chat Service
+# Chat Service - 智能聊天服务
 
-这是一个基于Spring Boot和LangChain4J构建的聊天微服务，支持与AI模型进行多轮对话，并提供了简单的前端界面。
+基于Spring Boot + LangChain4J + Vue 3构建的智能聊天服务应用。
 
-## 功能特性
+## 项目结构
 
-- 支持多轮对话
-- 会话管理和历史记录
-- 兼容OpenAI API格式
-- 可配置的模型参数
-- 基于Spring Boot的RESTful API
-- 简单的Web前端界面
+```
+chatService/
+├── src/main/java/              # Spring Boot后端代码
+├── src/main/resources/         # 后端资源配置
+│   └── static/                 # 前端静态资源（构建后）
+├── frontend/                   # Vue 3前端项目
+│   ├── src/
+│   │   ├── components/         # Vue组件
+│   │   ├── stores/           # Pinia状态管理
+│   │   └── views/            # 页面视图
+│   └── package.json          # 前端依赖配置
+├── build-frontend.bat        # Windows前端构建脚本
+├── build-frontend.sh         # Linux/Mac前端构建脚本
+└── pom.xml                   # Maven配置
+```
 
 ## 技术栈
 
-- Java 21
-- Spring Boot 3.2.0
-- LangChain4J 1.8.0
-- Maven
-- HTML/CSS/JavaScript
+### 后端
+- **Spring Boot 3.5** - 后端框架
+- **LangChain4J 1.8** - AI集成框架
+- **OpenAI API** - AI模型服务
+- **Reactor** - 响应式编程
+- **Java 21** - 编程语言
+
+### 前端
+- **Vue 3** - 前端框架
+- **TypeScript** - 类型安全的JavaScript
+- **Element Plus** - UI组件库
+- **Pinia** - 状态管理
+- **Vite** - 构建工具
 
 ## 快速开始
 
-1. 克隆项目并进入目录
-2. 配置API密钥（见下文）
-3. 运行项目：`mvn spring-boot:run`
-4. 访问Web界面：`http://localhost:8080`
-5. 或者直接使用API：`http://localhost:8080/api/chat`
-
-## 配置
-
-### 环境变量
-
-- `OPENAI_API_KEY`: OpenAI API密钥（必需）
-- `OPENAI_BASE_URL`: API基础URL（可选，默认为https://api.openai.com）
-- `MODEL_NAME`: 模型名称（可选，默认为gpt-3.5-turbo）
-
-### application.yml
-
-也可以在`src/main/resources/application.yml`中直接配置：
-
-```yaml
-chat:
-  model:
-    provider: openai
-    api-key: your-api-key-here
-    base-url: https://api.openai.com
-    model-name: gpt-3.5-turbo
-    temperature: 0.7
-    max-tokens: 1000
-    timeout: 30s
-```
-
-## API使用
-
-### 发送聊天请求
+### 1. 启动后端服务
 
 ```bash
-curl -X POST http://localhost:8080/api/chat \
-  -H "Content-Type: application/json" \
-  -d '{
-    "message": "你好，请介绍一下你自己"
-  }'
+# 编译项目
+mvn clean compile
+
+# 运行Spring Boot应用
+mvn spring-boot:run
 ```
 
-### 带会话ID的聊天请求
+后端服务将在 http://localhost:8080 启动
+
+### 2. 启动前端开发服务器
 
 ```bash
-curl -X POST http://localhost:8080/api/chat \
-  -H "Content-Type: application/json" \
-  -d '{
-    "sessionId": "your-session-id",
-    "message": "你能详细解释一下吗？"
-  }'
+cd frontend
+npm install
+npm run dev
 ```
 
-### 获取会话历史
+前端开发服务器将在 http://localhost:3000 启动，并代理API请求到后端服务
 
+### 3. 构建完整应用
+
+#### 构建前端
 ```bash
-curl -X GET http://localhost:8080/api/chat/history/{sessionId}
+# Windows
+build-frontend.bat
+
+# Linux/Mac
+bash build-frontend.sh
 ```
 
-### 清除会话历史
-
+#### 构建整个项目
 ```bash
-curl -X DELETE http://localhost:8080/api/chat/history/{sessionId}
+# 先构建前端，再构建后端
+build-frontend.bat  # 或 .sh
+mvn clean package
 ```
 
-## Web界面
+## 功能特性
 
-访问 `http://localhost:8080` 可以使用简单的Web聊天界面。界面功能包括：
+### 聊天功能
+- 💬 智能对话
+- 🔄 流式响应
+- 💾 会话历史管理
+- 📱 响应式界面
 
-- 发送消息给AI助手
-- 查看聊天历史
-- 清除聊天历史
-- 自动管理会话ID
+### API端点
+- `POST /api/chat` - 发送消息（非流式）
+- `POST /api/chat/stream` - 发送消息（流式响应）
+- `DELETE /api/chat/history/{sessionId}` - 清除会话历史
 
-## 扩展支持其他模型
+## 配置说明
 
-目前默认支持OpenAI格式的API，但可以通过修改`ChatModelConfig`类来支持其他兼容OpenAI格式的模型提供商。
+### 后端配置
+在 `src/main/resources/application.yml` 中配置：
+- OpenAI API密钥
+- 服务器端口
+- 其他应用参数
 
-## 会话管理
+### 前端配置
+在 `frontend/vite.config.ts` 中配置：
+- API代理地址
+- 开发服务器端口
+- 构建选项
 
-系统使用内存存储会话历史，每个会话通过唯一的sessionId标识。在生产环境中，您可能需要：
+## 开发建议
 
-1. 将内存存储替换为数据库存储
-2. 添加会话过期机制
-3. 实现用户认证和授权
+1. **分离开发** - 前后端可以独立开发和测试
+2. **API优先** - 先定义好API接口，再并行开发
+3. **类型安全** - 前后端都使用TypeScript提高代码质量
+4. **组件化** - 前端采用组件化开发模式
+
+## 部署
+
+### 独立部署
+- 后端：打包成JAR文件运行
+- 前端：构建后的静态文件部署到Nginx或Apache
+
+### 集成部署
+使用构建脚本将前端构建到后端的静态资源目录，统一部署
+
+## 贡献指南
+
+1. Fork项目
+2. 创建特性分支
+3. 提交更改
+4. 推送到分支
+5. 创建Pull Request
+
+## 许可证
+
+MIT License

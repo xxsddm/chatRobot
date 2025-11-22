@@ -1,20 +1,31 @@
 package com.gyt.chat.config;
 
-import dev.langchain4j.model.chat.ChatModel;
-import dev.langchain4j.model.openai.OpenAiChatModel;
+import dev.langchain4j.model.openai.OpenAiStreamingChatModel;
+import dev.langchain4j.model.chat.StreamingChatModel;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 @Configuration
 public class ModelConfig {
+    @Value("${model.openai.api-key}")
+    private String OPENAI_API_KEY;
+
+    @Value("${model.openai.base-url}")
+    private String OPENAI_BASE_URL;
+
+    @Value("${model.openai.model-name}")
+    private String OPENAI_MODEL_NAME;
+
+
     @Bean
-    ChatModel openAiChatModel() {
-        return OpenAiChatModel.builder()
-                .apiKey("5007dd8ce8cb40f69bde8508377c35e8.ESlHwMubfN6Gs8AD")
-                .baseUrl("https://open.bigmodel.cn/api/paas/v4")
-                .modelName("glm-4.5-flash")
+    StreamingChatModel openAiStreamingChatModel() {
+        return OpenAiStreamingChatModel.builder()
+                .apiKey(OPENAI_API_KEY)
+                .baseUrl(OPENAI_BASE_URL)
+                .modelName(OPENAI_MODEL_NAME)
                 .build();
-//        return OpenAiChatModel.builder()
+//        return OpenAiStreamingChatModel.builder()
 //                .apiKey("sk-khrctnxwaigqwbihxhwgysmhmzinkxzudvmphuegnxoxssuw")
 //                .baseUrl("https://api.siliconflow.cn/v1")
 //                .modelName("deepseek-ai/DeepSeek-R1-0528-Qwen3-8B")
