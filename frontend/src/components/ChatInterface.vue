@@ -43,6 +43,13 @@
           <h2>{{ chatStore.currentSession?.title || '聊天助手' }}</h2>
         </div>
         <div class="header-right">
+          <el-switch
+            v-model="currentSession.enableThinking"
+            active-text="思维链"
+            inactive-text="普通模式"
+            @change="handleThinkingToggle"
+            class="thinking-switch"
+          />
           <el-button
             type="warning"
             :icon="Delete"
@@ -123,7 +130,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, nextTick, watch } from 'vue'
+import { ref, nextTick, watch, computed } from 'vue'
 import { useChatStore } from '@/stores/chat'
 import MarkdownRenderer from './MarkdownRenderer.vue'
 import {
@@ -138,6 +145,8 @@ import {
 const chatStore = useChatStore()
 const inputMessage = ref('')
 const messagesContainer = ref<HTMLElement>()
+
+const currentSession = computed(() => chatStore.currentSession || { enableThinking: false })
 
 const formatTime = (date: Date | string) => {
   const d = new Date(date)
@@ -185,6 +194,10 @@ const deleteSession = (sessionId: string) => {
 const clearCurrentChat = () => {
   chatStore.clearCurrentSession()
   scrollToBottom()
+}
+
+const handleThinkingToggle = (value: boolean) => {
+  chatStore.toggleThinking(value)
 }
 
 // 监听消息变化，自动滚动到底部
@@ -310,6 +323,16 @@ watch(
   color: #333;
 }
 
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.thinking-switch {
+  margin-right: 12px;
+}
+
 .chat-messages {
   flex: 1;
   padding: 20px;
@@ -365,6 +388,29 @@ watch(
 
 .message-bubble :deep(li) {
   margin: 4px 0;
+}
+
+/* 表格样式修复 - 确保表格在消息气泡中正确显示 */
+.message-bubble :deep(.markdown-table) {
+  margin: 16px 0 !important;
+  width: 100% !important;
+  max-width: 100% !important;
+}
+
+.message-bubble :deep(.markdown-table th),
+.message-bubble :deep(.markdown-table td) {
+  padding: 8px 12px !important;
+  word-break: break-word !important;
+  max-width: 200px !important; /* 限制单元格最大宽度 */
+}
+
+.message-bubble :deep(.table-cell-content) {
+  white-space: pre-wrap !important;
+  word-wrap: break-word !important;
+  overflow-wrap: break-word !important;
+  word-break: break-all !important;
+  display: block !important;
+  line-height: 1.4 !important;
 }
 
 .message-wrapper.assistant .message-bubble {

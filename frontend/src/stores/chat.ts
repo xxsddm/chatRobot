@@ -15,6 +15,7 @@ export interface ChatSession {
   messages: Message[]
   createdAt: Date
   updatedAt: Date
+  enableThinking?: boolean // 思维链开关，默认为关闭
 }
 
 export const useChatStore = defineStore('chat', () => {
@@ -56,31 +57,31 @@ export const useChatStore = defineStore('chat', () => {
         timestamp: new Date()
       }],
       createdAt: new Date(),
-      updatedAt: new Date()
+      updatedAt: new Date(),
+      enableThinking: false // 默认关闭思维链
     }
-    
+
     // 确保新会话不会继承任何状态
     streamingMessages.value.delete(newSession.id)
     loadingSessions.value.delete(newSession.id)
-    
+
     // 添加到会话列表开头
     sessions.value.unshift(newSession)
-    
+
     // 设置为当前会话
     currentSession.value = newSession
-    
-    console.log(`新会话 ${newSession.id} 已创建`)
+
     return newSession
   }
 
   const addMessage = (role: 'user' | 'assistant', content: string, targetSessionId?: string) => {
     let targetSession = currentSession.value
-    
+
     // 如果指定了目标会话ID，找到对应的会话
     if (targetSessionId) {
       targetSession = sessions.value.find(s => s.id === targetSessionId) || currentSession.value
     }
-    
+
     if (!targetSession) {
       createNewSession()
       targetSession = currentSession.value
@@ -118,7 +119,8 @@ export const useChatStore = defineStore('chat', () => {
         },
         body: JSON.stringify({
           sessionId: targetSessionId,
-          message: content
+          message: content,
+          enableThinking: targetSession.enableThinking ?? false
         })
       })
 
@@ -135,35 +137,44 @@ export const useChatStore = defineStore('chat', () => {
       const decoder = new TextDecoder()
       let fullResponse = ''
       streamingMessages.value.set(targetSessionId, '')
-
+      
+      // SSE解析器状态
+      let buffer = '' // 累积不完整的SSE数据
+      
       while (true) {
         const { done, value } = await reader.read()
-        if (done) break
-
-        const chunk = decoder.decode(value)
-        const lines = chunk.split('\n')
-
-        for (const line of lines) {
-          if (line.trim()) {
-            let cleanLine = line.trim()
-            if (cleanLine.startsWith('data: ')) {
-              cleanLine = cleanLine.substring(6)
-            } else if (cleanLine.startsWith('data:')) {
-              cleanLine = cleanLine.substring(5)
+        if (done) {
+          // 处理剩余缓冲区内容
+          if (buffer.trim()) {
+            const message = buffer.replace(/^data:/, '')
+            fullResponse += message
+            if (streamingMessages.value.has(targetSessionId)) {
+              streamingMessages.value.set(targetSessionId, fullResponse)
             }
-            if (cleanLine && cleanLine !== ':') {
-              // 智能空格处理：清理中文字符之间的多余空格，但保留代码块和英文单词间的必要空格
-              if (!cleanLine.startsWith('```') && !cleanLine.includes('    ') && !cleanLine.match(/^\s*#/)) {
-                // 对于非代码行的中文内容，清理多余空格
-                cleanLine = cleanLine.replace(/([\u4e00-\u9fa5])\s+([\u4e00-\u9fa5])/g, '$1$2')
-              }
-              
-              // 直接添加处理后的内容，不额外添加空格或换行符
-              fullResponse += cleanLine
-              // 确保只在原始会话中更新流式消息
-              if (streamingMessages.value.has(targetSessionId)) {
-                streamingMessages.value.set(targetSessionId, fullResponse)
-              }
+          }
+          break
+        }
+
+        let chunk = decoder.decode(value, { stream: true })
+        if (!buffer && chunk.startsWith('data:')) {
+          chunk = chunk.slice(5)
+        }
+        buffer += chunk
+         
+        // 查找完整的SSE消息
+        let messageEndIndex
+        while ((messageEndIndex = buffer.indexOf('data:')) !== -1) {
+          // 提取完整的SSE消息
+          let messageContent = buffer.slice(0, messageEndIndex)
+          buffer = buffer.slice(messageEndIndex + 5) // 移除已处理的消息和分隔符
+          if (messageContent.endsWith('\n\n')) {
+            messageContent = messageContent.slice(0, -2)
+          }
+          if (messageContent) {
+            fullResponse += messageContent
+            // 确保只在原始会话中更新流式消息
+            if (streamingMessages.value.has(targetSessionId)) {
+              streamingMessages.value.set(targetSessionId, fullResponse)
             }
           }
         }
@@ -171,17 +182,22 @@ export const useChatStore = defineStore('chat', () => {
 
       // 只在原始会话中添加完整的AI回复
       if (fullResponse) {
+        // 修复可能的表格格式问题
+        // const fixedResponse = fixStreamingTable(fullResponse);
+        // if (fixedResponse !== fullResponse) {
+        //   console.log('表格格式已修复');
+        //   console.log('原始响应:', fullResponse);
+        //   console.log('修复后响应:', fixedResponse);
+        // }
         addMessage('assistant', fullResponse, targetSessionId)
       }
       streamingMessages.value.delete(targetSessionId)
 
     } catch (error) {
-      console.error('发送消息失败:', error)
       // 只在原始会话中添加错误消息
       addMessage('assistant', '抱歉，发生了错误，请稍后再试。', targetSessionId)
       streamingMessages.value.delete(targetSessionId)
-    } finally {
-      loadingSessions.value.delete(targetSessionId)
+    } finally {   loadingSessions.value.delete(targetSessionId)
     }
   }
 
@@ -200,26 +216,23 @@ export const useChatStore = defineStore('chat', () => {
   const deleteSession = (sessionId: string) => {
     const index = sessions.value.findIndex(s => s.id === sessionId)
     if (index !== -1) {
-      // 获取被删除的会话引用
-      const deletedSession = sessions.value[index]
-      
       // 从会话数组中删除
       sessions.value.splice(index, 1)
-      
+
       // 清理删除会话的流式消息和加载状态
       streamingMessages.value.delete(sessionId)
       loadingSessions.value.delete(sessionId)
-      
+
       // 如果删除的是当前会话，切换到其他会话
       if (currentSession.value?.id === sessionId) {
         // 优先切换到最近更新的会话
-        const sortedSessions = [...sessions.value].sort((a, b) => 
+        const sortedSessions = [...sessions.value].sort((a, b) =>
           new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
         )
         currentSession.value = sortedSessions[0] || null
       }
-      
-      console.log(`会话 ${sessionId} 已删除，剩余会话数: ${sessions.value.length}`)
+
+
     }
   }
 
@@ -227,6 +240,13 @@ export const useChatStore = defineStore('chat', () => {
     const session = sessions.value.find(s => s.id === sessionId)
     if (session) {
       currentSession.value = session
+    }
+  }
+
+  const toggleThinking = (enable?: boolean) => {
+    if (currentSession.value) {
+      currentSession.value.enableThinking = enable !== undefined ? enable : !currentSession.value.enableThinking
+      currentSession.value.updatedAt = new Date()
     }
   }
 
@@ -247,6 +267,7 @@ export const useChatStore = defineStore('chat', () => {
     clearCurrentSession,
     deleteSession,
     switchSession,
-    isSessionLoading
+    isSessionLoading,
+    toggleThinking
   }
 })

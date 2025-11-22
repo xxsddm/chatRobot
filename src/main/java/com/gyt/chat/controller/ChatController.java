@@ -51,8 +51,8 @@ public class ChatController {
             request.setSessionId(UUID.randomUUID().toString());
         }
 
-        // 调用流式聊天服务
-        return chatService.chatStream(request.getSessionId(), request.getMessage());
+        // 调用流式聊天服务，传入思维链开关参数
+        return chatService.chatStream(request.getSessionId(), request.getMessage(), request.isEnableThinking());
     }
     
     @GetMapping("/history/{sessionId}")

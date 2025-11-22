@@ -21,91 +21,105 @@ const contentRef = ref(null)
 const renderer = new marked.Renderer()
 
 // 重写代码块渲染方法
-renderer.code = function(code, lang) {
-  // 确保code是字符串，并保留原始格式（包括换行符）
-  const codeStr = String(code || '')
+renderer.code = function(code, lang, escaped) {
+  // 调试日志
+  console.log('代码块渲染 - code类型:', typeof code, 'lang:', lang, 'escaped:', escaped)
+  console.log('代码块内容:\n', code)
+  if (!lang) {
+    lang = 'plaintext'
+  }
   
-  const validLang = lang && hljs.getLanguage(lang) ? lang : 'plaintext'
-  
-  // 保留原始代码的换行符和格式
-  const originalCode = codeStr.replace(/\r\n/g, '\n').replace(/\r/g, '\n')
-  
-  let highlightedCode
-  try {
-    // 使用highlight.js高亮代码
-    const result = hljs.highlight(originalCode, { language: validLang })
-    highlightedCode = result.value
-  } catch (err) {
-    console.warn('Highlight.js error:', err)
+  // 确保code是字符串类型 - 处理对象、数组等各种情况
+  let codeStr
+  if (typeof code === 'string') {
+    codeStr = code
+  } else if (code && typeof code === 'object') {
+    // 如果是对象，尝试获取其中的字符串内容
+    codeStr = code.text || code.content || code.value || JSON.stringify(code)
     try {
-      const result = hljs.highlightAuto(originalCode)
-      highlightedCode = result.value
-    } catch (autoErr) {
-      console.warn('Highlight.js auto highlight error:', autoErr)
-      // 如果高亮失败，返回HTML转义后的原始代码
-      highlightedCode = originalCode.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      lang = code.lang || lang
+    } catch (ignored) {
+    }
+  } else {
+    // 其他类型转换为字符串
+    codeStr = String(code || '')
+  }
+  
+  console.log('转换后的代码字符串:\n', codeStr)
+  console.log('语言参数lang:\n', lang)
+  
+  // 修复语言检测逻辑
+  let validLang = 'plaintext'
+  if (lang && typeof lang === 'string') {
+    // 如果指定了语言且有效，使用指定语言
+    if (hljs.getLanguage(lang)) {
+      validLang = lang
+    } else {
+      // 尝试自动检测语言
+      try {
+        const detectedLang = hljs.highlightAuto(codeStr).language
+        validLang = detectedLang || 'plaintext'
+      } catch (e) {
+        validLang = 'plaintext'
+      }
+    }
+  } else {
+    // 如果没有指定语言，尝试自动检测
+    try {
+      const detectedLang = hljs.highlightAuto(codeStr).language
+      validLang = detectedLang || 'plaintext'
+    } catch (e) {
+      validLang = 'plaintext'
     }
   }
   
+  console.log('最终使用的语言:', validLang)
+  
+  let highlightedCode
+  try {
+    const result = hljs.highlight(codeStr, { language: validLang })
+    highlightedCode = result.value
+  } catch (err) {
+    try {
+      const result = hljs.highlightAuto(codeStr)
+      highlightedCode = result.value
+    } catch (autoErr) {
+      highlightedCode = codeStr.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    }
+  }
+
   return `
     <div class="code-block-wrapper">
       <div class="code-block-header">
         <span class="code-language">${validLang}</span>
-        <button class="copy-button" data-code="${encodeURIComponent(originalCode)}">复制</button>
+        <button class="copy-button" data-code="${encodeURIComponent(codeStr)}">复制</button>
       </div>
       <pre><code class="hljs language-${validLang}">${highlightedCode}</code></pre>
     </div>
   `
 }
 
-// 重写表格渲染方法
-renderer.table = function(header, body) {
-  return `
-    <table class="markdown-table">
-      <thead>
-        ${header}
-      </thead>
-      <tbody>
-        ${body}
-      </tbody>
-    </table>
-  `
-}
-
-// 重写表格行渲染方法
-renderer.tablerow = function(content) {
-  return `<tr>${content}</tr>`
-}
-
-// 重写表格单元格渲染方法
-renderer.tablecell = function(content, flags) {
-  const tag = flags.header ? 'th' : 'td'
-  const align = flags.align ? ` style="text-align: ${flags.align}"` : ''
-  return `<${tag}${align}>${content}</${tag}>`
-}
-
-// 配置marked选项 - 移除highlight函数，使用自定义renderer
+// 配置marked选项
 marked.setOptions({
   renderer: renderer,
-  breaks: false, // 不自动转换换行符，保持原始格式
-  gfm: true, // GitHub Flavored Markdown
+  breaks: true,
+  gfm: true,
+  tables: true,
   pedantic: false,
   sanitize: false,
   smartLists: true,
   smartypants: false,
   headerIds: true,
   mangle: false,
-  langPrefix: 'hljs language-' // 添加语言前缀
+  langPrefix: 'hljs language-'
 })
 
 // 渲染markdown内容的计算属性
 const renderedContent = computed(() => {
   if (!props.content) return ''
-  
+
   try {
-    // 确保内容转换为字符串，防止[object Object]问题
-    const contentStr = String(props.content)
-    return marked.parse(contentStr)
+    return marked.parse(props.content)
   } catch (error) {
     console.error('Markdown渲染错误:', error)
     return `<div class="markdown-error">Markdown渲染错误: ${error.message}</div>`
@@ -124,7 +138,6 @@ const handleCopyClick = async (button) => {
       button.textContent = '复制'
     }, 2000)
   } catch (err) {
-    console.error('复制失败:', err)
     button.classList.add('error')
     button.textContent = '复制失败'
     setTimeout(() => {
@@ -140,9 +153,7 @@ watch(() => props.content, () => {
     if (contentRef.value) {
       const copyButtons = contentRef.value.querySelectorAll('.copy-button')
       copyButtons.forEach(button => {
-        // 移除旧的事件监听器
         button.removeEventListener('click', handleCopyClick)
-        // 添加新的事件监听器
         button.addEventListener('click', () => handleCopyClick(button))
       })
     }
@@ -228,23 +239,31 @@ watch(() => props.content, () => {
 }
 
 /* 表格样式 */
-.markdown-content :deep(.markdown-table) {
+.markdown-content :deep(table) {
   border-collapse: collapse;
   width: 100%;
   margin: 16px 0;
   border: 1px solid #e1e4e8;
 }
 
-.markdown-content :deep(.markdown-table th),
-.markdown-content :deep(.markdown-table td) {
+.markdown-content :deep(th),
+.markdown-content :deep(td) {
   border: 1px solid #e1e4e8;
   padding: 8px 12px;
   text-align: left;
 }
 
-.markdown-content :deep(.markdown-table th) {
+.markdown-content :deep(th) {
   background-color: #f6f8fa;
   font-weight: 600;
+}
+
+.markdown-content :deep(tr:nth-child(even)) {
+  background-color: #f9f9f9;
+}
+
+.markdown-content :deep(tr:hover) {
+  background-color: #f0f0f0;
 }
 
 /* 其他元素样式 */
@@ -314,5 +333,15 @@ watch(() => props.content, () => {
   background: #dc3545;
   border-color: #dc3545;
   color: white;
+}
+
+/* 错误信息样式 */
+.markdown-content :deep(.markdown-error) {
+  padding: 12px;
+  background-color: #ffebee;
+  border: 1px solid #ffcdd2;
+  border-radius: 4px;
+  color: #c62828;
+  margin: 16px 0;
 }
 </style>
