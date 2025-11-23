@@ -1,6 +1,7 @@
 package com.gyt.chat.config;
 
 import lombok.Data;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Configuration;
 
@@ -12,7 +13,8 @@ public class MapDbConfig {
     /**
      * 数据文件存储路径
      */
-    private String dataPath = "E:\\download\\data\\chat-history";
+    @Value("${mapdb.dataPath:/data/chat-history}")
+    private String dataPath;
     
     /**
      * 数据库文件名

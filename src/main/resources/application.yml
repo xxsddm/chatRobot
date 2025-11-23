@@ -24,3 +24,5 @@ model:
   timeout:
     second: 30
   primary: default
+mapdb:
+  dataPath: /data/chat-history

@@ -1,0 +1,120 @@
+version: '3.8'
+
+services:
+  # 后端服务
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: chat-service-backend
+    ports:
+      - "8080:8080"
+    volumes:
+      # 数据持久化 - 聊天历史数据
+      - ./data/chat-history:/data/chat-history
+      # 日志文件持久化
+      - ./logs/backend:/app/logs
+    environment:
+      # 时区设置
+      - TZ=Asia/Shanghai
+      # MapDB配置
+      - MAPDB_DATA_PATH=/data/chat-history
+      - MAPDB_MAX_SESSIONS=1000
+      - MAPDB_DISK_THRESHOLD_MB=500
+      # 模型配置
+      - MODEL_OPENAI_API_KEY=${OPENAI_API_KEY:-5007dd8ce8cb40f69bde8508377c35e8.ESlHwMubfN6Gs8AD}
+      - MODEL_OPENAI_BASE_URL=https://open.bigmodel.cn/api/paas/v4
+      - MODEL_OPENAI_MODEL_NAME=glm-4.5-flash
+      - MODEL_OLLAMA_BASE_URL=http://ollama:11434
+      - MODEL_OLLAMA_MODEL_NAME=qwen3:1.7b
+      - MODEL_TEMPERATURE=0.7
+      - MODEL_TIMEOUT_SECOND=30
+    networks:
+      - chat-network
+    depends_on:
+      - ollama
+    restart: unless-stopped
+    # 资源限制
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # 前端服务
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: chat-service-frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    networks:
+      - chat-network
+    restart: unless-stopped
+    # 资源限制
+    deploy:
+      resources:
+        limits:
+          cpus: '0.2'
+          memory: 128M
+        reservations:
+          cpus: '0.1'
+          memory: 32M
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+#  # Ollama服务（可选，用于本地模型）
+#  ollama:
+#    image: ollama/ollama:latest
+#    container_name: chat-service-ollama
+#    ports:
+#      - "11434:11434"
+#    volumes:
+#      # Ollama模型数据持久化
+#      - ./data/ollama:/root/.ollama
+#    environment:
+#      - OLLAMA_KEEP_ALIVE=24h
+#    networks:
+#      - chat-network
+#    restart: unless-stopped
+#    # 资源限制
+#    deploy:
+#      resources:
+#        limits:
+#          cpus: '4.0'
+#          memory: 4G
+#        reservations:
+#          cpus: '1.0'
+#          memory: 512M
+#    healthcheck:
+#      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+#      interval: 30s
+#      timeout: 10s
+#      retries: 3
+#      start_period: 60s
+
+networks:
+  chat-network:
+    driver: bridge
+
+volumes:
+  chat-history-data:
+    driver: local
+  ollama-data:
+    driver: local
