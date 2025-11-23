@@ -1,12 +1,8 @@
-version: '3.8'
-
 services:
   # 后端服务
   backend:
-    build:
-      context: .
-      dockerfile: Dockerfile.backend
     container_name: chat-service-backend
+    image: 25c7076e6ce8
     ports:
       - "8080:8080"
     volumes:
@@ -25,14 +21,12 @@ services:
       - MODEL_OPENAI_API_KEY=${OPENAI_API_KEY:-5007dd8ce8cb40f69bde8508377c35e8.ESlHwMubfN6Gs8AD}
       - MODEL_OPENAI_BASE_URL=https://open.bigmodel.cn/api/paas/v4
       - MODEL_OPENAI_MODEL_NAME=glm-4.5-flash
-      - MODEL_OLLAMA_BASE_URL=http://ollama:11434
+      - MODEL_OLLAMA_BASE_URL=http://localhost:11434
       - MODEL_OLLAMA_MODEL_NAME=qwen3:1.7b
       - MODEL_TEMPERATURE=0.7
       - MODEL_TIMEOUT_SECOND=30
     networks:
       - chat-network
-    depends_on:
-      - ollama
     restart: unless-stopped
     # 资源限制
     deploy:
@@ -44,22 +38,21 @@ services:
           cpus: '0.5'
           memory: 256M
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8080/actuator/health || exit 1"]
       interval: 30s
       timeout: 10s
-      retries: 3
-      start_period: 60s
+      retries: 5
+      start_period: 90s
 
   # 前端服务
   frontend:
-    build:
-      context: .
-      dockerfile: Dockerfile.frontend
     container_name: chat-service-frontend
+    image: af152f966fa8
     ports:
       - "80:80"
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     networks:
       - chat-network
     restart: unless-stopped
@@ -73,11 +66,11 @@ services:
           cpus: '0.1'
           memory: 32M
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost/"]
+      test: ["CMD", "wget --no-verbose --tries=1 --spider http://localhost/ || exit 1"]
       interval: 30s
       timeout: 10s
-      retries: 3
-      start_period: 30s
+      retries: 5
+      start_period: 60s
 
 #  # Ollama服务（可选，用于本地模型）
 #  ollama:
