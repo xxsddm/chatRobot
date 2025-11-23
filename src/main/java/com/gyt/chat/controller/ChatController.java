@@ -2,6 +2,7 @@ package com.gyt.chat.controller;
 
 import com.gyt.chat.dto.ChatRequest;
 import com.gyt.chat.dto.ChatResponse;
+import com.gyt.chat.model.ChatSessionEntity;
 import com.gyt.chat.service.ChatService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
@@ -15,7 +16,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import reactor.core.publisher.Flux;
 
+import java.util.List;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/chat")
@@ -69,5 +72,25 @@ public class ChatController {
     public ResponseEntity<Void> clearHistory(@PathVariable String sessionId) {
         chatService.clearHistory(sessionId);
         return ResponseEntity.ok().build();
+    }
+    
+    @GetMapping("/sessions")
+    public ResponseEntity<List<ChatResponse>> getAllSessions() {
+        List<ChatSessionEntity> sessions = chatService.getAllSessions();
+        List<ChatResponse> responses = sessions.stream()
+                .map(session -> {
+                    ChatResponse response = new ChatResponse();
+                    response.setSessionId(session.getSessionId());
+                    response.setHistory(ChatResponse.convertHistory(session.getMessages()));
+                    response.setTimestamp(session.getUpdatedAt()
+                            .atZone(java.time.ZoneOffset.UTC)
+                            .toInstant()
+                            .toEpochMilli());
+                    return response;
+                })
+                .sorted((a, b) -> Long.compare(b.getTimestamp(), a.getTimestamp())) // 按时间降序排序
+                .collect(Collectors.toList());
+        
+        return ResponseEntity.ok(responses);
     }
 }

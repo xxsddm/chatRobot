@@ -18,11 +18,19 @@ export interface ChatSession {
   enableThinking?: boolean // 思维链开关，默认为关闭
 }
 
+// API会话接口
+interface ApiSession {
+  sessionId: string
+  history: Message[]
+  timestamp: number
+}
+
 export const useChatStore = defineStore('chat', () => {
   const currentSession = ref<ChatSession | null>(null)
   const sessions = ref<ChatSession[]>([])
   const loadingSessions = ref<Set<string>>(new Set())
   const streamingMessages = ref<Map<string, string>>(new Map())
+  const isLoadingSessions = ref<boolean>(false)
 
   const currentMessages = computed(() => currentSession.value?.messages || [])
   const streamingMessage = computed(() => {
@@ -236,13 +244,6 @@ export const useChatStore = defineStore('chat', () => {
     }
   }
 
-  const switchSession = (sessionId: string) => {
-    const session = sessions.value.find(s => s.id === sessionId)
-    if (session) {
-      currentSession.value = session
-    }
-  }
-
   const toggleThinking = (enable?: boolean) => {
     if (currentSession.value) {
       currentSession.value.enableThinking = enable !== undefined ? enable : !currentSession.value.enableThinking
@@ -250,24 +251,91 @@ export const useChatStore = defineStore('chat', () => {
     }
   }
 
+  const switchSession = (sessionId: string) => {
+    const session = sessions.value.find(s => s.id === sessionId)
+    if (session) {
+      currentSession.value = session
+      // 清理该会话的流式消息状态
+      streamingMessages.value.delete(sessionId)
+      loadingSessions.value.delete(sessionId)
+    }
+  }
+
+  const loadAllSessions = async () => {
+    isLoadingSessions.value = true
+    try {
+      const response = await fetch('/api/chat/sessions')
+      if (response.ok) {
+        const apiSessions: ApiSession[] = await response.json()
+        // 转换API会话格式到本地格式
+        sessions.value = apiSessions.map(apiSession => ({
+          id: apiSession.sessionId,
+          title: getSessionTitle(apiSession.history),
+          messages: apiSession.history,
+          createdAt: new Date(apiSession.timestamp),
+          updatedAt: new Date(apiSession.timestamp)
+        }))
+      } else if (response.status === 404) {
+        console.warn('后端服务未启动或API接口不存在，使用本地会话数据')
+        // 如果后端不可用，确保至少有一个默认会话
+        if (sessions.value.length === 0 && !currentSession.value) {
+          createNewSession()
+        }
+      } else {
+        console.error('Failed to load sessions:', response.status, response.statusText)
+      }
+    } catch (error) {
+      console.error('Error loading sessions:', error)
+      // 网络错误时，确保至少有一个默认会话
+      if (sessions.value.length === 0 && !currentSession.value) {
+        createNewSession()
+      }
+    } finally {
+      isLoadingSessions.value = false
+    }
+  }
+
+  const getSessionTitle = (history: Message[]) => {
+    if (history && history.length > 0) {
+      const firstUserMessage = history.find((msg: Message) => msg.role === 'user')
+      if (firstUserMessage && firstUserMessage.content) {
+        return firstUserMessage.content.length > 20 
+          ? firstUserMessage.content.substring(0, 20) + '...'
+          : firstUserMessage.content
+      }
+    }
+    return '新会话'
+  }
+
   // 初始化
   if (!currentSession.value && sessions.value.length === 0) {
     createNewSession()
   }
 
+  // 确保会话数据的有效性
+  const ensureValidSession = () => {
+    if (!currentSession.value && sessions.value.length === 0) {
+      createNewSession()
+    } else if (!currentSession.value && sessions.value.length > 0) {
+      currentSession.value = sessions.value[0]
+    }
+  }
+
   return {
     currentSession,
     sessions,
-    isLoading,
-    streamingMessage,
     currentMessages,
-    createNewSession,
-    sendMessage,
-    addMessage,
-    clearCurrentSession,
-    deleteSession,
-    switchSession,
+    streamingMessage,
+    isLoading,
+    isLoadingSessions,
     isSessionLoading,
+    createNewSession,
+    loadAllSessions,
+    switchSession,
+    addMessage,
+    sendMessage,
+    deleteSession,
+    clearCurrentSession,
     toggleThinking
   }
 })

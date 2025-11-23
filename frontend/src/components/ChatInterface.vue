@@ -6,6 +6,9 @@
         <el-button type="primary" :icon="Plus" @click="createNewChat" class="new-chat-btn">
           新建会话
         </el-button>
+        <el-button type="info" :icon="Refresh" @click="loadSessions" :loading="chatStore.isLoadingSessions" size="small">
+          刷新
+        </el-button>
       </div>
       
       <div class="session-list">
@@ -130,7 +133,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, nextTick, watch, computed } from 'vue'
+import { ref, nextTick, watch, computed, onMounted } from 'vue'
 import { useChatStore } from '@/stores/chat'
 import MarkdownRenderer from './MarkdownRenderer.vue'
 import {
@@ -139,7 +142,8 @@ import {
   User,
   ChatLineRound,
   Loading,
-  Position
+  Position,
+  Refresh
 } from '@element-plus/icons-vue'
 
 const chatStore = useChatStore()
@@ -182,6 +186,18 @@ const createNewChat = () => {
   scrollToBottom()
 }
 
+const loadSessions = async () => {
+  try {
+    await chatStore.loadAllSessions()
+  } catch (error) {
+    console.warn('Failed to load sessions from server, using local sessions:', error)
+    // 如果加载失败，确保至少有一个会话
+    if (!chatStore.currentSession) {
+      chatStore.createNewSession()
+    }
+  }
+}
+
 const switchSession = (sessionId: string) => {
   chatStore.switchSession(sessionId)
   scrollToBottom()
@@ -199,6 +215,20 @@ const clearCurrentChat = () => {
 const handleThinkingToggle = (value: boolean) => {
   chatStore.toggleThinking(value)
 }
+
+// 组件挂载时初始化
+onMounted(async () => {
+  try {
+    // 加载所有会话
+    await loadSessions()
+  } catch (error) {
+    console.warn('Failed to initialize chat interface:', error)
+    // 确保至少有一个会话可用
+    if (!chatStore.currentSession) {
+      chatStore.createNewSession()
+    }
+  }
+})
 
 // 监听消息变化，自动滚动到底部
 watch(
